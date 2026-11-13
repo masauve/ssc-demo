@@ -56,8 +56,8 @@ deployer:
   apiUrl: ""
 
 gitops:
-  repoUrl: "https://github.com/lzspangler/ssc-demo.git"
-  revision: "ssc-demo"
+  repoUrl: "https://github.com/masauve/ssc-demo.git"
+  #revision: "ssc-demo"
   basePath: "automation/gitops"
   # The Tekton resources are NOT under basePath -- they live at the repo root,
   # where pipelines/README.md documents them. Argo applies them from there
