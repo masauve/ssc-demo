@@ -8,9 +8,13 @@ metadata:
   annotations:
     {{- include "keycloak.argocd-syncwave" . | nindent 4 }}
 spec:
-  {{ if .Values.route.host }}
-  host: {{ .Values.route.host }}
-  {{ end }}
+  # Always set, from the same helper the Keycloak CR's `hostname` uses. Setting
+  # it only when route.host was given let the router assign its generated
+  # `keycloak-keycloak.<domain>` whenever the default route.localName (`sso`)
+  # was in effect -- so the CR advertised https://sso.<domain> as the issuer
+  # while nothing served that host, and every OIDC consumer (the
+  # rhtpa-prerequisites wait-for-keycloak hook first) waited on it forever.
+  host: {{ include "keycloak.hostname" . }}
   to:
     kind: Service
     name: {{ include "keycloak.name" . }}-service
