@@ -3,8 +3,14 @@ fullnameOverride: ""
 
 replicaCount: 1
 
+# RHBK 26 refuses to start on PostgreSQL < 13 ("configured to run with a
+# database version of at least '13.0.0'"). Same sclorg image family as the old
+# rhel8/postgresql-12, so env vars, mount path and probes are unchanged -- but
+# a data directory initialized by 12 will NOT start under 16. On an existing
+# install, wipe /var/lib/pgsql/data/userdata (or set POSTGRESQL_UPGRADE=copy
+# to migrate) before rolling this out.
 image:
-  repository: registry.redhat.io/rhel8/postgresql-12
+  repository: registry.redhat.io/rhel9/postgresql-16
   pullPolicy: IfNotPresent
   tag: "1"
 

@@ -6,7 +6,7 @@ subcharts, installed in this order by sync wave:
 | Wave | Subchart | What it does |
 |---|---|---|
 | -3 | `keycloak-operator` | OperatorGroup + Subscription for `rhbk-operator` |
-| -3 | `keycloak-db` | PostgreSQL for Keycloak itself (5Gi PVC) |
+| -3 | `keycloak-db` | PostgreSQL 16 for Keycloak itself (5Gi PVC; RHBK 26 needs 13+) |
 | -1 | `keycloak` | the `Keycloak` CR and its Route |
 | -1 | `keycloak-realm-import` | the `KeycloakRealmImport` CR — a 2200-line realm document |
 
