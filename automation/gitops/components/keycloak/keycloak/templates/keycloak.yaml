@@ -23,7 +23,17 @@ spec:
     enabled: {{ .Values.ingress.enabled }}
   http:
     httpEnabled: true
+  # RHBK 26 hostname v2. `hostname` is a full URL, not a bare host: the Route
+  # terminates TLS at the edge and forwards plain HTTP, so a bare host would let
+  # Keycloak derive the scheme from the request and publish an http:// issuer
+  # -- which RHTAS, RHTPA and the pipeline's `oidc-issuer` all reject, since
+  # they are configured with https://sso.<domain>/realms/<realm>. The v1
+  # `adminUrl` option no longer exists; `admin` is its v2 replacement.
   hostname:
-    hostname: {{ include "keycloak.hostname" . }}
+    hostname: https://{{ include "keycloak.hostname" . }}
+    admin: https://{{ include "keycloak.hostname" . }}
     strict: false
-    adminUrl: https://{{ include "keycloak.hostname" . }}
+  # Trust X-Forwarded-* from the OpenShift router (the v2 replacement for
+  # `proxy=edge`), so request-derived URLs such as backchannel ones are https.
+  proxy:
+    headers: xforwarded

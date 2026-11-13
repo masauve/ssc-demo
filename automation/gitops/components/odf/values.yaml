@@ -23,7 +23,7 @@ odf-operator:
   namespace: openshift-storage
   subscription:
     # Must match the cluster's OpenShift minor. See the subchart's values.yaml.
-    channel: stable-4.21
+    channel: stable-4.22
     source: redhat-operators
 
 odf-storagecluster:

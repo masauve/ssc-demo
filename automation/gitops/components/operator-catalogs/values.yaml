@@ -1,0 +1,30 @@
+# =============================================================================
+# Extra OLM CatalogSources, created in openshift-marketplace.
+#
+# WHY THIS EXISTS: OpenShift 5.0 moved the default `redhat-operators` catalog to
+# registry.redhat.io/redhat/redhat-operator-index:v5.0, and that index does not
+# (yet) carry rhbk-operator or rhtpa-operator. A Subscription to a package the
+# catalog lacks fails with
+#   constraints not satisfiable: no operators found in package <pkg> in the
+#   catalog referenced by subscription <sub>
+# The keycloak and rhtpa-operator components point their Subscriptions at the
+# catalog below instead (see components.keycloak.subscription.source and
+# components.rhtpaOperator.source in bootstrap-infra/values.yaml).
+#
+# Check whether a package has landed in the default catalog before removing
+# this -- once both have, point the Subscriptions back at `redhat-operators`
+# and set components.operatorCatalogs.enabled: false:
+#   oc get packagemanifests -o custom-columns=PKG:.metadata.name,CAT:.status.catalogSource \
+#     | grep -E 'rhbk-operator|rhtpa-operator'
+#
+# The name is shared with bootstrap-infra/values.yaml. Rename both or neither.
+# =============================================================================
+
+namespace: openshift-marketplace
+
+catalogs:
+  - name: redhat-operators-v4-21
+    displayName: Red Hat Operators (OCP 4.21 index)
+    publisher: Red Hat
+    image: registry.redhat.io/redhat/redhat-operator-index:v4.21
+    pollInterval: 240m

@@ -13,6 +13,9 @@
 # Sync-wave order (an Application's wave only advances once the previous wave is
 # Healthy, so this is a real dependency chain):
 #
+#   -1  operator-catalogs        Extra CatalogSources for operators the cluster's
+#                                default catalog lacks (rhbk-operator and
+#                                rhtpa-operator on OpenShift 5.0).
 #    0  pipelines                OpenShift Pipelines operator -- CRDs everything else's
 #                                tasks need; nothing depends on it at install time, so
 #                                it goes first and gets out of the way.
@@ -107,6 +110,18 @@ credentials:
 # =============================================================================
 components:
 
+  # Extra OLM CatalogSources (components/operator-catalogs). On OpenShift 5.0
+  # the default `redhat-operators` catalog (index v5.0) does not carry
+  # rhbk-operator or rhtpa-operator, so this adds a pinned v4.21 Red Hat index
+  # that keycloak and rhtpaOperator subscribe from (their `source` below).
+  # Wave -1: before anything that subscribes to an operator.
+  #
+  # On a 4.x cluster the default catalog already has both packages: set this
+  # false and set both `source` values back to redhat-operators.
+  operatorCatalogs:
+    enabled: true
+    syncWave: "-1"
+
   pipelines:
     enabled: true
     namespace: openshift-operators
@@ -143,10 +158,12 @@ components:
     enabled: false
     namespace: openshift-storage
     syncWave: "0"
-    # MUST match the cluster's OpenShift minor version:
+    # MUST be a channel the cluster's catalog offers -- normally the one
+    # matching its OpenShift minor. OpenShift 5.0's index ships ODF only as
+    # stable-4.22, so that is the default. Check before installing:
     #   oc -n openshift-marketplace get packagemanifest odf-operator \
     #     -o jsonpath='{.status.defaultChannel}{"\n"}'
-    channel: stable-4.21
+    channel: stable-4.22
     # The BLOCK storage class Ceph carves OSDs from -- gp3-csi on AWS,
     # thin-csi on vSphere, an LSO class on bare metal. Not the class anything
     # else in the demo consumes.
@@ -211,6 +228,15 @@ components:
     # path below still gets a correct issuer by setting this to the realm your
     # existing Keycloak actually serves.
     realm: backstage
+    subscription:
+      # RHBK 26.6. The CR in components/keycloak/keycloak uses the hostname-v2
+      # options RHBK 26 requires; do not drop back to stable-v24 without
+      # reverting that too.
+      channel: stable-v26.6
+      # rhbk-operator is not in the OCP 5.0 `redhat-operators` index; this is
+      # the catalog components.operatorCatalogs adds. Use redhat-operators on
+      # a 4.x cluster.
+      source: redhat-operators-v4-21
 
   # Bring-your-own-Keycloak. Mutually exclusive with `keycloak` above: set
   # that one to `enabled: false`, set its `realm` to the realm you already
@@ -326,6 +352,10 @@ components:
     syncWave: "15"
     # stable-v3 is RHTPA 3.x, the first line Exploit Intelligence supports.
     channel: stable-v3
+    # rhtpa-operator is not in the OCP 5.0 `redhat-operators` index; this is
+    # the catalog components.operatorCatalogs adds. Use redhat-operators on a
+    # 4.x cluster.
+    source: redhat-operators-v4-21
     # Set false if the namespace already has an OperatorGroup -- two in one
     # namespace puts every operator in it into an error state.
     createOperatorGroup: true

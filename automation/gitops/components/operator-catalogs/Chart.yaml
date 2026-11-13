@@ -1,0 +1,8 @@
+apiVersion: v2
+name: operator-catalogs
+description: >-
+  Extra OLM CatalogSources for operators the cluster's default catalogs do not
+  carry -- currently a pinned OCP 4.21 Red Hat index for the operators not yet
+  published to the OCP 5.0 index (rhbk-operator, rhtpa-operator).
+type: application
+version: 0.1.0

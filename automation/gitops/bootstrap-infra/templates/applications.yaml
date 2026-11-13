@@ -25,6 +25,34 @@
 #     CR whose CRD does not exist yet.
 # =============================================================================
 
+{{- if .Values.components.operatorCatalogs.enabled }}
+---
+# Extra CatalogSources (see components/operator-catalogs/values.yaml). Ahead of
+# every operator-installing component so their Subscriptions never point at a
+# catalog that does not exist yet.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Release.Name }}-operator-catalogs
+  namespace: {{ .Values.argocd.namespace }}
+  labels:
+    {{- include "root-app.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ .Values.components.operatorCatalogs.syncWave | quote }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocd.project }}
+  source:
+    repoURL: {{ .Values.gitops.repoUrl }}
+    targetRevision: {{ .Values.gitops.revision }}
+    path: {{ .Values.gitops.basePath }}/components/operator-catalogs
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-marketplace
+  {{- include "root-app.syncPolicy" . | nindent 2 }}
+{{- end }}
+
 {{- if .Values.components.pipelines.enabled }}
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -288,6 +316,11 @@ spec:
         global:
           cluster:
             subdomain: {{ $domain | quote }}
+        keycloak-operator:
+          keycloak:
+            subscription:
+              channel: {{ .Values.components.keycloak.subscription.channel | quote }}
+              source: {{ .Values.components.keycloak.subscription.source | quote }}
         keycloak-db:
           pgsql:
             password: {{ .Values.credentials.keycloakDbPassword | quote }}
@@ -580,6 +613,7 @@ spec:
         createOperatorGroup: {{ $ro.createOperatorGroup }}
         subscription:
           channel: {{ $ro.channel | quote }}
+          source: {{ $ro.source | quote }}
         trustedProfileAnalyzer:
           routeTimeout: {{ $ro.routeTimeout | quote }}
           storage:

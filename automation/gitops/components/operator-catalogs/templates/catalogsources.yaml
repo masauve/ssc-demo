@@ -1,0 +1,27 @@
+{{- range .Values.catalogs }}
+---
+# A plain grpc CatalogSource. OLM runs one catalog pod per source in
+# openshift-marketplace; the pull secret for registry.redhat.io comes from the
+# cluster's global pull secret, so nothing else is needed.
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: {{ required "catalogs[].name is required" .name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    demo.redhat.com/application: "ssc-demo"
+    app.kubernetes.io/name: operator-catalogs
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/part-of: ssc-demo
+spec:
+  displayName: {{ .displayName | default .name | quote }}
+  publisher: {{ .publisher | default "Red Hat" | quote }}
+  sourceType: grpc
+  image: {{ required "catalogs[].image is required" .image }}
+  grpcPodConfig:
+    securityContextConfig: restricted
+  updateStrategy:
+    registryPoll:
+      interval: {{ .pollInterval | default "240m" }}
+{{- end }}

@@ -5,6 +5,7 @@ installed by Argo CD onto a cluster that already has OpenShift GitOps running.
 
 | Component | Where the chart comes from | What it gives the demo |
 |---|---|---|
+| `components/operator-catalogs` | this repo | extra OLM CatalogSource (`redhat-operators-v4-21`) for `rhbk-operator` and `rhtpa-operator`, which the OpenShift 5.0 `redhat-operators` index does not carry |
 | `components/pipelines` | this repo | OpenShift Pipelines (Tekton) operator |
 | `pipelines/` (repo root) | this repo, applied as plain YAML | the demo's 23 Tasks, 5 Pipelines, the issue-comment Triggers and `ai-agent-config` |
 | `components/keycloak` | vendored from `redhat-ads-tech/ocp-app-platform-demo-helm` v1.4.2 | the `backstage` realm; `tpa-cli` / `tpa-frontend` / `trusted-artifact-signer` clients |

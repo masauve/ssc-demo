@@ -289,7 +289,7 @@ And ODF, if §0 said you need it:
 components:
   odf:
     enabled: true
-    channel: stable-4.21      # must match the cluster's OpenShift minor
+    channel: stable-4.22      # must be the catalog's default ODF channel (stable-4.22 on OCP 5.0)
     storageClassName: gp3-csi # a BLOCK class, not the demo's general-purpose one
 ```
 

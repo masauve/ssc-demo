@@ -74,7 +74,15 @@ Set a secret explicitly (as `tpa-cli` is) and it is stable regardless.
   the defaults the demo needs.
 * **Catalog source** `redhat-operators-snapshot` → `redhat-operators`. The
   snapshot catalog only exists in the Red Hat workshop environment the
-  reference cluster is built from.
+  reference cluster is built from. On OpenShift 5.0 bootstrap-infra overrides
+  this with `redhat-operators-v4-21` (from `components/operator-catalogs`),
+  because the 5.0 `redhat-operators` index does not carry `rhbk-operator`.
+* **RHBK 26.6 (`stable-v26.6`) instead of 24.** The `Keycloak` CR uses the
+  hostname-v2 options RHBK 26 requires: `hostname.hostname` is a full
+  `https://` URL, `hostname.admin` replaces the removed `adminUrl`, and
+  `proxy.headers: xforwarded` replaces `proxy=edge`. Without the `https://`
+  the edge-terminated Route makes Keycloak publish an `http://` issuer, and
+  every OIDC consumer (RHTAS, RHTPA, the pipelines) rejects its tokens.
 * **Hostnames derive from `global.cluster.subdomain`.** `keycloak.ocpDomain`
   prefers it and only falls back to the IngressController `lookup`, because
   Argo CD renders with `helm template` and no cluster connection — there the

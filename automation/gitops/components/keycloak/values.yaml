@@ -36,7 +36,7 @@ global:
 keycloak-operator:
   keycloak:
     subscription:
-      channel: stable-v24
+      channel: stable-v26.6
       installPlanApproval: Automatic
       name: rhbk-operator
       # The reference cluster pins `redhat-operators-snapshot`, a catalog
