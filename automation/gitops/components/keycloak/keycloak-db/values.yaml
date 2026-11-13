@@ -21,13 +21,28 @@ securityContext:
 
 podAnnotations: {}
 
+# The image's first boot (initdb, then a socket-only server to create the role
+# and database) is CPU-bound; at the old 250m limit it overran the liveness
+# probe and was killed between initdb and CREATE ROLE, leaving a data directory
+# every later start fails on (`role "keycloak" does not exist`).
 resources:
   limits:
-    cpu: 250m
-    memory: 256Mi
+    cpu: "1"
+    memory: 512Mi
   requests:
     cpu: 100m
-    memory: 128Mi
+    memory: 256Mi
+
+# Gates the liveness and readiness probes until Postgres accepts TCP. During
+# first-boot setup and crash recovery the image listens on its Unix socket
+# only, so the TCP liveness check cannot pass -- without this, a slow first
+# boot is killed mid-init and the volume is left half-initialized.
+# 10s x 30 = 5 minutes.
+startupProbe:
+  tcpSocket:
+    port: 5432
+  periodSeconds: 10
+  failureThreshold: 30
 
 livenessProbe:
   timeoutSeconds: 1

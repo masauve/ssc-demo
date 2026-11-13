@@ -34,6 +34,10 @@ spec:
             - name: postgresql
               containerPort: {{ .Values.service.containerPort }}
               protocol: TCP
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:
@@ -60,8 +64,7 @@ spec:
           volumeMounts:
             - name: "{{ include "keycloak-db.name" . }}-data"
               mountPath: "/var/lib/pgsql/data"
-              volumes:
-      {{- end }}
+          {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
       {{- if eq .Values.persistence.mode "persistent" }}
