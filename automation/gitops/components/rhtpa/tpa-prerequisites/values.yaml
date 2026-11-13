@@ -49,6 +49,20 @@ resources:
     cpu: 500m
     memory: 2Gi
 
+# Gates the liveness and readiness probes until Postgres accepts TCP. During
+# first-boot setup and crash recovery the image listens on its Unix socket only,
+# so the TCP liveness check cannot pass; without this the ~35 s liveness budget
+# killed the first boot between initdb and CREATE DATABASE (leaving a volume
+# every later start fails on with `database "trustify" does not exist`), and
+# the crash recovery that followed -- an fsync of the whole data directory, over
+# 50 s on slow storage -- was killed the same way, forever.
+# 10s x 30 = 5 minutes.
+startupProbe:
+  tcpSocket:
+    port: 5432
+  periodSeconds: 10
+  failureThreshold: 30
+
 livenessProbe:
   timeoutSeconds: 1
   initialDelaySeconds: 5
