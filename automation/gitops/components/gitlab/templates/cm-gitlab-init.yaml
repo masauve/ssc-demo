@@ -281,6 +281,25 @@ data:
             status_code: 200
           register: r_chart_values
 
+        # Compute the rewritten file ONCE and use that single value for both
+        # the skip check and the commit. The previous version inlined the same
+        # regex_replace in `content:` (single-quoted scalar) and in `when:`
+        # (folded block); on current ansible-core (verified on 2.22) the two
+        # do not unescape the "\\s"/"\\1" Jinja string literals the same
+        # way, so the `when:` saw a change, the `content:` regex matched
+        # nothing, and the task committed the file UNCHANGED -- an empty
+        # commit titled "Point image.repository at this cluster's Quay" while
+        # every environment kept pulling from the authoring cluster's Quay.
+        # Pattern and replacement are passed as plain task vars so no Jinja
+        # string-literal escaping is involved at all.
+        - name: Compute the retargeted {{ $rewrite.file }} for {{ $repo.name }}
+          vars:
+            image_repo_pattern: '(?m)^(\s*repository:\s*).*$'
+            image_repo_replacement: '\g<1>{{ $targetRepo }}'
+          set_fact:
+            chart_values_old: '{{ "{{" }} r_chart_values.json.content | b64decode {{ "}}" }}'
+            chart_values_new: '{{ "{{" }} r_chart_values.json.content | b64decode | regex_replace(image_repo_pattern, image_repo_replacement) {{ "}}" }}'
+
         - name: Retarget image.repository in {{ $repo.name }} to this cluster's Quay
           ansible.builtin.uri:
             url: https://{{ $host }}/api/v4/projects/{{ "{{" }} project_id {{ "}}" }}/repository/files/{{ $rewrite.file | urlquery }}
@@ -288,7 +307,7 @@ data:
             body_format: form-urlencoded
             body:
               branch: {{ $branch }}
-              content: '{{ "{{" }} r_chart_values.json.content | b64decode | regex_replace("(?m)^(\\s*repository:\\s*).*$", "\\1{{ $targetRepo }}") {{ "}}" }}'
+              content: '{{ "{{" }} chart_values_new {{ "}}" }}'
               commit_message: "Point image.repository at this cluster's Quay"
             headers:
               PRIVATE-TOKEN: '{{ "{{" }} root_token {{ "}}" }}'
@@ -297,10 +316,21 @@ data:
           # Skip when the rewrite would change nothing -- either the line
           # already points here (re-run on the same cluster) or the file has
           # no repository line at all (nothing this task should touch).
-          when: >-
-            r_chart_values.json.content | b64decode
-            | regex_replace("(?m)^(\\s*repository:\\s*).*$", "\\1{{ $targetRepo }}")
-            != r_chart_values.json.content | b64decode
+          when: chart_values_new != chart_values_old
+
+        # Fail loudly instead of reporting success with the wrong registry:
+        # after this task the file must reference this cluster's Quay.
+        - name: Verify {{ $rewrite.file }} in {{ $repo.name }} now points at this cluster's Quay
+          ansible.builtin.uri:
+            url: https://{{ $host }}/api/v4/projects/{{ "{{" }} project_id {{ "}}" }}/repository/files/{{ $rewrite.file | urlquery }}?ref={{ $branch }}
+            method: GET
+            headers:
+              PRIVATE-TOKEN: '{{ "{{" }} root_token {{ "}}" }}'
+            validate_certs: false
+            status_code: 200
+          register: r_chart_values_after
+          failed_when: >-
+            '{{ $targetRepo }}' not in (r_chart_values_after.json.content | b64decode)
 {{- end }}
 
 {{- if $repo.labels }}

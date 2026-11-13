@@ -1,0 +1,78 @@
+# =============================================================================
+# LVMCluster for sno1 -- NVMe and HDD in SEPARATE volume groups.
+#
+# DO NOT APPLY ON TOP OF THE CURRENT LVMCluster. LVMS cannot remove a disk from
+# an existing volume group, so this only takes effect after the teardown in
+# README.md (all lvms-vg1 PVCs deleted, old LVMCluster deleted, both disks
+# wiped).
+#
+# Why: the previous LVMCluster had no deviceSelector, so LVMS's RuntimeDynamic
+# discovery put every empty disk into one VG -- the 2 TB WD_BLACK SN770 NVMe
+# AND the 8 TB Seagate ST8000DM004 (5400 rpm SMR HDD). Most of the thin pool's
+# extents landed on the HDD (it is ~80% of the capacity), so every PVC on
+# lvms-vg1 ran at HDD speed: ~48 ms flushes, 100+ ms Postgres writes.
+#
+# Result after applying:
+#   StorageClass lvms-vg1   NVMe, DEFAULT -- same name as before, so every
+#                           chart and PVC that uses the default class (or
+#                           names lvms-vg1) keeps working unchanged.
+#   StorageClass lvms-hdd   HDD -- bulk, latency-tolerant data only (image
+#                           registry, backups, object-store backing). Never
+#                           Postgres/MySQL/etcd-style fsync-heavy workloads.
+#
+# Devices are pinned by /dev/disk/by-id so a renumbering of sdX/nvmeXnY after a
+# reboot or a new disk cannot pull the wrong drive in. The OS disk
+# (nvme-ADATA_SX8200PNP_2K282L2H28JU) is deliberately in neither class.
+#
+# Verified on the node (vg-manager pod, /dev/disk/by-id), 2026-11-13:
+#   nvme-WD_BLACK_SN770_2TB_24224S804118 -> nvme0n1
+#   ata-ST8000DM004-2U9188_ZR15NYXA      -> sda
+# =============================================================================
+apiVersion: lvm.topolvm.io/v1alpha1
+kind: LVMCluster
+metadata:
+  name: lvmcluster
+  namespace: openshift-lvm-storage
+spec:
+  storage:
+    deviceClasses:
+      # --- Fast tier: NVMe ---------------------------------------------------
+      # Keeps the name `vg1` on purpose: the StorageClass and
+      # VolumeSnapshotClass stay `lvms-vg1`, which is what every existing PVC
+      # spec, Helm value and Argo app on this cluster already references.
+      - name: vg1
+        default: true
+        fstype: xfs
+        deviceSelector:
+          paths:
+            - /dev/disk/by-id/nvme-WD_BLACK_SN770_2TB_24224S804118
+          # Only if the teardown's manual wipefs was skipped. LVMS refuses
+          # disks with existing signatures; this makes it wipe them instead.
+          # Destroys everything on the listed paths -- leave false unless you
+          # are certain.
+          # forceWipeDevicesAndDestroyAllData: true
+        thinPoolConfig:
+          name: thin-pool-1
+          sizePercent: 90
+          overprovisionRatio: 10
+          chunkSizeCalculationPolicy: Static
+          metadataSizeCalculationPolicy: Host
+
+      # --- Bulk tier: HDD ----------------------------------------------------
+      # 8 TB SMR drive: fine for large sequential data, terrible for small
+      # synchronous writes. Opt in per PVC with storageClassName: lvms-hdd.
+      - name: hdd
+        default: false
+        fstype: xfs
+        deviceSelector:
+          paths:
+            - /dev/disk/by-id/ata-ST8000DM004-2U9188_ZR15NYXA
+          # forceWipeDevicesAndDestroyAllData: true
+        thinPoolConfig:
+          name: thin-pool-hdd
+          sizePercent: 90
+          # Lower than the NVMe class: overcommitting a slow disk just moves
+          # the out-of-space failure to the worst possible moment.
+          overprovisionRatio: 2
+          chunkSizeCalculationPolicy: Static
+          metadataSizeCalculationPolicy: Host
