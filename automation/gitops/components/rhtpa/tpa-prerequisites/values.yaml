@@ -61,10 +61,19 @@ startupProbe:
   tcpSocket:
     port: 5432
   periodSeconds: 10
-  failureThreshold: 30
+  # 30 minutes. Once the database holds real data (the importers load several
+  # GB), crash recovery replays WAL and syncs the data directory before TCP
+  # opens; at 5 minutes the probe killed recovery partway through, which forced
+  # the next start back into recovery from scratch -- a restart loop.
+  failureThreshold: 180
 
+# Tolerant on purpose: under importer load on slow storage a 1 s TCP check can
+# miss, and a liveness kill of a busy database is what starts crash recovery.
+# 6 x 20 s = 2 minutes of sustained failure before restarting.
 livenessProbe:
-  timeoutSeconds: 1
+  timeoutSeconds: 5
+  periodSeconds: 20
+  failureThreshold: 6
   initialDelaySeconds: 5
   tcpSocket:
     port: 5432
@@ -148,3 +157,17 @@ global:
 argocd:
   enabled: true
   syncwave: "-1"
+
+# Time Postgres gets to finish its shutdown checkpoint after SIGTERM. The
+# Kubernetes default (30 s) is far shorter than a checkpoint on slow storage:
+# the pod was SIGKILLed mid-checkpoint, leaving an unclean data directory and a
+# crash recovery on every following start.
+terminationGracePeriodSeconds: 300
+
+# Extra postgresql.conf settings, mounted at /opt/app-root/src/postgresql-cfg/
+# (the rhel9/postgresql image appends every *.conf there to its config).
+postgresqlConfig:
+  # Crash recovery syncs the data directory before replaying WAL. `fsync` (the
+  # default) opens and fsyncs every file -- 200+ s for ~8 GB here; `syncfs`
+  # (PostgreSQL 14+, Linux 5.8+) does one syncfs() of the filesystem instead.
+  recovery_init_sync_method: syncfs

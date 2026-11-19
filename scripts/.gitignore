@@ -1,0 +1,5 @@
+# Local-only helper scripts: never committed.
+# Ignore everything in this directory except this file, so the directory
+# itself stays in the repo.
+*
+!.gitignore

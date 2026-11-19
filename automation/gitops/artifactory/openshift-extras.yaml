@@ -188,8 +188,10 @@ spec:
 # artifactory.artifactory.configMapName + copyOnEveryStartup (see
 # application-artifactory.yaml).
 #
-# Defines two REMOTE Maven proxies (lightwell-validated, lightwell-remediated)
-# and a VIRTUAL Maven repo (lightwell) aggregating them. Point Maven at
+# Defines a LOCAL Maven repo (lightwell-remediated-local: workshop artifacts no
+# upstream channel serves, seeded by pipelines/ops/artifactory-seed-lightwell-local.sh),
+# two REMOTE Maven proxies (lightwell-validated, lightwell-remediated) and
+# VIRTUAL Maven repos (lightwell, maven) aggregating them, local first. Point Maven at
 #   <route>/artifactory/lightwell
 apiVersion: v1
 kind: ConfigMap
@@ -201,7 +203,40 @@ metadata:
 data:
   artifactory.repository.config.import.json: |
     {
-      "localRepoConfigs": [],
+      "localRepoConfigs": [
+        {
+          "type": "local",
+          "key": "lightwell-remediated-local",
+          "packageType": "maven",
+          "baseConfig": {
+            "modelVersion": 2,
+            "description": "Hosted Lightwell workshop artifacts no upstream channel serves (seeded by pipelines/ops/artifactory-seed-lightwell-local.sh)",
+            "repoLayoutRef": "maven-2-default",
+            "includesPattern": "**/*",
+            "federationConfig": {
+              "federationOnGrid": false,
+              "members": [],
+              "modificationDate": 0,
+              "federated": false
+            }
+          },
+          "repoTypeConfig": {
+            "blackedOut": false,
+            "archiveBrowsingEnabled": false,
+            "propertySetRefs": [],
+            "handleReleases": true,
+            "handleSnapshots": false,
+            "maxUniqueSnapshots": 0,
+            "suppressPomConsistencyChecks": false
+          },
+          "packageTypeConfig": {},
+          "securityConfig": {
+            "hideUnauthorizedResources": false,
+            "signedUrlTtl": 90
+          },
+          "repoType": "LOCAL"
+        }
+      ],
       "federatedRepoConfigs": [],
       "releaseBundleRepoConfigs": [],
       "remoteRepoConfigs": [
@@ -387,6 +422,7 @@ data:
           },
           "repoTypeConfig": {
             "repositoryRefs": [
+              "lightwell-remediated-local",
               "lightwell-validated",
               "lightwell-remediated",
               "maven-central"
@@ -421,6 +457,7 @@ data:
           },
           "repoTypeConfig": {
             "repositoryRefs": [
+              "lightwell-remediated-local",
               "lightwell-validated",
               "lightwell-remediated",
               "maven-central"

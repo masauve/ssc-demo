@@ -12,3 +12,17 @@ data:
     psql -d $POSTGRESQL_DATABASE -c "ALTER EXTENSION pg_trgm SET SCHEMA public;"
     psql -d $POSTGRESQL_DATABASE -c "GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO $POSTGRESQL_USER;"
     psql -d $POSTGRESQL_DATABASE -c "ALTER USER $POSTGRESQL_USER WITH SUPERUSER;"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tpa-prerequisites.name" . }}-cfg
+  labels:
+    {{- include "tpa-prerequisites.labels" . | nindent 4 }}
+  annotations:
+    {{- include "tpa-prerequisites.argocd-syncwave" . | nindent 4 }}
+data:
+  tuning.conf: |
+    {{- range $k, $v := .Values.postgresqlConfig }}
+    {{ $k }} = {{ $v }}
+    {{- end }}

@@ -16,16 +16,18 @@ spec:
     type: Recreate
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        checksum/postgresql-cfg: {{ toJson .Values.postgresqlConfig | sha256sum }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       labels:
         {{- include "tpa-prerequisites.selectorLabels" . | nindent 8 }}
     spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       serviceAccountName: {{ include "tpa-prerequisites.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds | default 300 }}
       containers:
         - name: postgresql
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -63,6 +65,8 @@ spec:
           volumeMounts:
             - name: "{{ include "tpa-prerequisites.name" . }}-start"
               mountPath: "/opt/app-root/src/postgresql-start"
+            - name: "{{ include "tpa-prerequisites.name" . }}-cfg"
+              mountPath: "/opt/app-root/src/postgresql-cfg"
           {{- if eq .Values.persistence.mode "persistent" }}
             - name: "{{ include "tpa-prerequisites.name" . }}-data"
               mountPath: "/var/lib/pgsql/data"
@@ -73,6 +77,9 @@ spec:
         - name: "{{ include "tpa-prerequisites.name" . }}-start"
           configMap:
             name: {{ include "tpa-prerequisites.name" . }}-start
+        - name: "{{ include "tpa-prerequisites.name" . }}-cfg"
+          configMap:
+            name: {{ include "tpa-prerequisites.name" . }}-cfg
       {{- if eq .Values.persistence.mode "persistent" }}
         - name: "{{ include "tpa-prerequisites.name" . }}-data"
           persistentVolumeClaim:

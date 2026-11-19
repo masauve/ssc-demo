@@ -3,6 +3,10 @@
 Everything the supply-chain demo needs, other than the pipelines themselves,
 installed by Argo CD onto a cluster that already has OpenShift GitOps running.
 
+> **On OpenShift 5?** Read [OCP5-CHANGES.md](OCP5-CHANGES.md) first. It covers
+> what changed to make the demo work there, the operator-catalog workaround, and
+> the items that are still open.
+
 | Component | Where the chart comes from | What it gives the demo |
 |---|---|---|
 | `components/operator-catalogs` | this repo | extra OLM CatalogSource (`redhat-operators-v4-21`) for `rhbk-operator` and `rhtpa-operator`, which the OpenShift 5.0 `redhat-operators` index does not carry |

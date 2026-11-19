@@ -6,11 +6,12 @@ repositories plus a **virtual** repo that aggregates them:
 
 | Repo key               | Kind    | Proxies / aggregates                                                              |
 | ---------------------- | ------- | -------------------------------------------------------------------------------- |
+| `lightwell-remediated-local` | local | Hosted Lightwell workshop artifacts no upstream channel serves (`commons-lang3:3.14.0.rhlw-00001`) — seeded by `pipelines/ops/artifactory-seed-lightwell-local.sh` |
 | `lightwell-validated`  | remote  | `https://packages.redhat.com/lightwell/public-lightwell-demo/java/validated/`     |
 | `lightwell-remediated` | remote  | `https://packages.redhat.com/lightwell/public-lightwell-demo/java/remediated/`    |
 | `maven-central`        | remote  | `https://repo.maven.apache.org/maven2/`                                            |
-| `lightwell`            | virtual | `lightwell-validated` + `lightwell-remediated` + `maven-central`                   |
-| `maven`                | virtual | `lightwell-validated` + `lightwell-remediated` + `maven-central`                   |
+| `lightwell`            | virtual | `lightwell-remediated-local` + `lightwell-validated` + `lightwell-remediated` + `maven-central` |
+| `maven`                | virtual | `lightwell-remediated-local` + `lightwell-validated` + `lightwell-remediated` + `maven-central` |
 
 Point Maven at a virtual repo: `https://<route>/artifactory/maven` (or `/lightwell`).
 In each virtual the Lightwell proxies are listed ABOVE `maven-central`, so curated
@@ -21,6 +22,48 @@ Red Hat artifacts win and Central is the fallback.
 > already-initialized instance requires reinitializing so the importer re-runs
 > (delete the `artifactory`+`artifactory-postgresql` StatefulSets and their PVCs;
 > the config lives in the Postgres `configs` store, so the DB PVC must go too).
+
+### Why `lightwell-remediated-local` exists
+
+RHTPA advisory `LW-DEMO-0011` (loaded by `pipelines/ops/rhtpa-load-lightwell-data.sh`)
+says `org.apache.commons:commons-lang3:3.14.0.rhlw-00001` fixes CVE-2025-48924, so
+`agentic-cve-remediation` pins that version. The upstream demo channel behind
+`lightwell-remediated` only has `spring-core` and `woodstox-core`. That GAV used to
+come from the old Nexus `lightwell-repo` seed, and without it the remediation's
+verification build fails with `Could not find artifact ...:3.14.0.rhlw-00001`.
+`lightwell-remediated-local` hosts it (the workshop POM and the real Commons Lang
+3.14.0 jar, SHA-1 checked against Central), and it is listed first in both
+virtual repos.
+
+The repo comes from the bootstrap import. **The artifact does not**: after any
+(re)initialization, run:
+
+```
+pipelines/ops/artifactory-seed-lightwell-local.sh
+```
+
+### Adding a repository (re-initialization)
+
+1. Edit `artifactory.repository.config.import.json` in `openshift-extras.yaml`,
+   then apply **only that ConfigMap**. Do **not** `oc apply -f openshift-extras.yaml`:
+   every object in the file has the same label, and a whole-file apply resets
+   the three real Secrets (`artifactory-admin`, `artifactory-keys`,
+   `artifactory-postgresql`) to their `REPLACE_ME` stubs. That loses the admin
+   password and breaks the database connection.
+   ```
+   python3 -c 'import sys;print("---\n".join(d for d in open(sys.argv[1]).read().split("\n---\n") if "kind: ConfigMap" in d))' \
+     openshift-extras.yaml | oc apply -f -
+   ```
+2. Pause Argo CD's auto-sync on the `artifactory` Application, so it cannot
+   recreate pods halfway through.
+3. `oc -n artifactory delete statefulset artifactory artifactory-postgresql`
+4. `oc -n artifactory delete pvc artifactory-volume-artifactory-0 data-artifactory-postgresql-0`.
+   Confirm the names first with `oc -n artifactory get pvc`. The two PVCs are
+   labelled differently, so a label selector catches only one of them, and both
+   must go.
+5. Re-enable auto-sync, or sync by hand. The importer runs on the fresh
+   instance. Expect 10 to 15 minutes, and a cold proxy cache afterwards.
+6. Run any seed scripts, such as the one above.
 
 ## Files
 
