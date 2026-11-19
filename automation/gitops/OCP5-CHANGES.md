@@ -114,6 +114,27 @@ data.**
   - a more tolerant liveness probe (5 s timeout, 6 × 20 s)
   - a 30-minute startup budget
   - a checksum annotation, so the pod restarts when the config changes
+  - **demo-only speed-up:** `fsync = off`, `synchronous_commit = off` and
+    `full_page_writes = off`, so commits no longer wait on the slow disk. A
+    clean restart loses nothing; a hard crash can corrupt the database, and then
+    you wipe `/var/lib/pgsql/data/userdata`. I chose this over an `emptyDir`
+    because RHTPA creates its schema only in Helm install/upgrade hooks, so an
+    empty database after each restart would leave it broken.
+
+### 1.4b The same crash-recovery loop in Artifactory's and GitLab's Postgres (2026-11-18)
+
+Both other Postgres instances on the HDD-backed `lvms-vg1` volume group hit
+the same loop: an unclean stop left a crash recovery that ran longer than the
+pod would wait, so the pod was killed and recovery restarted from scratch.
+
+| Instance | What killed recovery | Fix | How it's applied |
+|---|---|---|---|
+| `artifactory-postgresql` (JFrog chart, PostgreSQL 17) | Liveness probe after about 90 s, no startup probe | `artifactory.postgresql.primary`: `terminationGracePeriodSeconds: 300`, a startup probe (180 × 10 s), liveness 6 × 20 s, and `extendedConfiguration` with `recovery_init_sync_method = syncfs` plus the demo-only `fsync` / `synchronous_commit` / `full_page_writes = off` | `artifactory/application-artifactory.yaml`. **Re-apply it with `oc apply -f`**: the Application is standalone, not generated from git. Done 2026-11-18 |
+| `gitlab-postgresql` (`quay.io/redhat-gpte/gitlab-postgresql:14`) | Liveness after about 60 s, and the image's own `pg_ctl -w start`, which gives up after 60 s (`pg_ctl: server did not start in time`) | `PGCTLTIMEOUT=1800`, server args `-c recovery_init_sync_method=syncfs -c fsync=off -c synchronous_commit=off -c full_page_writes=off`, a startup probe (180 × 10 s), liveness 6 × 20 s, grace period 300 s | `components/gitlab/templates/deploy-postgresql.yaml` (git, synced by `ssc-gitlab`) |
+
+For GitLab, the `-c` arguments only reach the final server. The image's
+temporary setup start, where crash recovery runs, keeps the `postgresql.conf`
+defaults, so it relies on the longer `PGCTLTIMEOUT`.
 
 ### 1.5 GitLab seeding job: image repository never changed (commit `3bca268`)
 

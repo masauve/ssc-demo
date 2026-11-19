@@ -27,8 +27,50 @@ spec:
           value: {{ $.Values.postgresql.dbName }}
         - name: DB_EXTENSION
           value: pg_trgm,btree_gist
+        # SLOW-STORAGE HARDENING (same failure as tpa-postgresql and Artifactory's
+        # Postgres; see automation/gitops/OCP5-CHANGES.md). The image's setup
+        # runs `pg_ctl -w start` before configuring the server, and crash
+        # recovery happens inside it; pg_ctl gives up after 60 s by default
+        # ("pg_ctl: server did not start in time"). It reads PGCTLTIMEOUT, and
+        # the image's exec_as_postgres (sudo -HEu) passes the environment through.
+        - name: PGCTLTIMEOUT
+          value: "1800"
         image: quay.io/redhat-gpte/gitlab-postgresql:14
         imagePullPolicy: Always
+        # Arguments starting with "-" go to the final postgres server.
+        #   recovery_init_sync_method: one syncfs() instead of a per-file fsync
+        #   of the data directory in crash recovery.
+        #   fsync / synchronous_commit / full_page_writes off: DEMO ONLY, so
+        #   commits stop waiting on the slow disk. A clean restart loses
+        #   nothing; a hard crash can corrupt the DB (the recovery is then to
+        #   wipe the volume and let the GitLab init Job re-seed).
+        # They do not apply to the image's temporary setup start, which keeps
+        # postgresql.conf defaults; PGCTLTIMEOUT above covers that phase.
+        args:
+        - -c
+        - recovery_init_sync_method=syncfs
+        - -c
+        - fsync=off
+        - -c
+        - synchronous_commit=off
+        - -c
+        - full_page_writes=off
+        # Gate liveness until Postgres answers; 180 x 10 s = 30 minutes covers
+        # crash recovery on slow storage.
+        startupProbe:
+          exec:
+            command:
+            - pg_isready
+            - -h
+            - localhost
+            - -U
+            - postgres
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 180
+        # 6 x 20 s = 2 minutes of sustained failure before a restart. The
+        # image's setup stops its temporary server and starts the real one,
+        # a short gap this rides through.
         livenessProbe:
           exec:
             command:
@@ -38,7 +80,9 @@ spec:
             - -U
             - postgres
           initialDelaySeconds: 30
+          periodSeconds: 20
           timeoutSeconds: 5
+          failureThreshold: 6
         name: postgresql
         ports:
         - containerPort: 5432
@@ -56,6 +100,7 @@ spec:
             - -U
             - postgres
           initialDelaySeconds: 5
+          timeoutSeconds: 5
         securityContext:
           privileged: true
         volumeMounts:
@@ -67,3 +112,6 @@ spec:
           claimName: gitlab-postgresql
       serviceAccount: gitlab
       serviceAccountName: gitlab
+      # Let the shutdown checkpoint finish instead of SIGKILL at 30 s; that is
+      # what left the data directory needing crash recovery.
+      terminationGracePeriodSeconds: 300
