@@ -166,7 +166,24 @@ terminationGracePeriodSeconds: 300
 
 # Extra postgresql.conf settings, mounted at /opt/app-root/src/postgresql-cfg/
 # (the rhel9/postgresql image appends every *.conf there to its config).
+#
+# DEMO-ONLY DURABILITY TRADE-OFF. The volume sits on slow storage (an
+# HDD-backed LVMS volume group on the reference SNO), and every commit waiting
+# on fsync made RHTPA's importers and API crawl. The first three settings stop
+# Postgres waiting on the disk: committed data reaches it within seconds
+# instead of synchronously. A clean restart loses nothing. A hard crash
+# (kernel panic, power loss, SIGKILL mid-write) can corrupt the database; the
+# recovery is then to wipe /var/lib/pgsql/data/userdata and let RHTPA
+# re-create and re-import. Never use these settings for data you need.
+#
+# Chosen over an emptyDir: RHTPA only creates its schema in Helm
+# pre-install/pre-upgrade hooks (create-db, migrate), so a database that comes
+# back empty after every restart leaves RHTPA broken until the operator is
+# forced to re-run them.
 postgresqlConfig:
+  fsync: "off"
+  synchronous_commit: "off"
+  full_page_writes: "off"
   # Crash recovery syncs the data directory before replaying WAL. `fsync` (the
   # default) opens and fsyncs every file -- 200+ s for ~8 GB here; `syncfs`
   # (PostgreSQL 14+, Linux 5.8+) does one syncfs() of the filesystem instead.
